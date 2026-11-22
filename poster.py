@@ -116,7 +116,12 @@ def whoami():
     """Instagram account to post to: config ig_user_id, else the token's own account (Instagram login)."""
     ig = str(CFG.get('ig_user_id') or '')
     if ig:
-        me = api('GET', ig, fields='id,username')
+        try:
+            me = api('GET', ig, fields='id,username,followers_count,media_count')
+        except ApiError as e:
+            if e.code == 190:
+                raise
+            me = api('GET', ig, fields='id,username')
         return ig, me
     me = api('GET', 'me', fields='user_id,username,account_type')
     return str(me.get('user_id') or me['id']), me
@@ -331,6 +336,14 @@ def run_post(st):
     return errors
 
 
+def who(me):
+    """One line about the account for the reports."""
+    out = f"@{me.get('username')}"
+    if me.get('followers_count') is not None:
+        out += f", {me['followers_count']} followers, {me.get('media_count')} posts"
+    return out
+
+
 def pick_items(ids, n=2):
     sched = load(os.path.join(ROOT, 'schedule.json'), {'items': []})['items']
     if ids:
@@ -343,7 +356,7 @@ def pick_items(ids, n=2):
 def run_dryrun(ids):
     ig, me = whoami()
     lines = [f'# Test run {now():%Y-%m-%d %H:%M} UTC (nothing published)', '',
-             f"Account: @{me.get('username')} ({me.get('account_type')})", '']
+             f"Account: {who(me)}", '']
     ok = True
     for item in pick_items(ids):
         try:
@@ -379,7 +392,7 @@ def run_check(ids):
         log('\n'.join(lines))
         return 0
     ig, me = whoami()
-    lines = [f'# Check {now():%Y-%m-%d %H:%M} UTC', '', f"Account: @{me.get('username')} ({me.get('account_type')})"]
+    lines = [f'# Check {now():%Y-%m-%d %H:%M} UTC', '', f"Account: {who(me)}"]
     try:
         lim = api('GET', f'{ig}/content_publishing_limit', fields='quota_usage,config')
         lines.append(f'Posting limit: {json.dumps(lim.get("data", lim))}')
