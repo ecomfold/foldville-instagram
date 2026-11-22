@@ -48,6 +48,8 @@ LEAD = timedelta(minutes=CFG.get('prepare_minutes_before', 10))
 LOOK = timedelta(minutes=CFG.get('lookahead_minutes', 26))
 LATE = timedelta(hours=CFG.get('late_hours', 3))
 MAX_TRIES = CFG.get('max_tries', 3)
+TRIAL_REFUSED = 2207081  # Instagram: the account doesn't meet the Trial Reel follower rule (about 200 followers)
+TRIAL_RETRY = timedelta(hours=CFG.get('trial_retry_hours', 20))
 
 
 def now():
@@ -68,9 +70,14 @@ def local(dt):
 
 
 class ApiError(Exception):
-    def __init__(self, msg, code=None):
+    def __init__(self, msg, code=None, sub=None):
         super().__init__(msg)
         self.code = code
+        self.sub = sub
+
+
+class Skip(Exception):
+    """An item left out on purpose (config trial_fallback "skip" while Trial Reels are not allowed)."""
 
 
 # ---------- Instagram API ----------
@@ -103,7 +110,7 @@ def api(method, path, **params):
                 log('Instagram busy, retrying:', msg)
                 time.sleep(30 * (attempt + 1))
                 continue
-            raise ApiError(msg, code)
+            raise ApiError(msg, code, err.get('error_subcode'))
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
             if attempt < 3:
                 log('network problem, retrying:', e)
@@ -171,30 +178,76 @@ def caption(item):
     return text
 
 
-def prepare(ig, item):
-    """Creates the post on Instagram without publishing it; returns (container id, media base used)."""
+def trial_refused(e):
+    text = str(e).lower()
+    return e.sub == TRIAL_REFUSED or ('trial reel' in text and 'follower' in text)
+
+
+def trial_allowed(st):
+    """False while Instagram refused a Trial Reel within the last trial_retry_hours."""
+    t = st.get('trial_refused')
+    return not t or now() - datetime.fromisoformat(t) > TRIAL_RETRY
+
+
+def create_reel(ig, item, base, trial):
+    p = dict(media_type='REELS', caption=caption(item), video_url=link(base, item['video']),
+             cover_url=link(base, item['cover']))
+    if trial:
+        p['trial_params'] = json.dumps({'graduation_strategy': CFG.get('trial_graduation', 'SS_PERFORMANCE')})
+    else:
+        p['share_to_feed'] = 'true'
+    if CFG.get('ai_label', True):
+        p['is_ai_generated'] = 'true'
+    return api('POST', f'{ig}/media', **p)['id']
+
+
+def create_carousel(ig, item, base):
+    kids = [api('POST', f'{ig}/media', image_url=link(base, f), is_carousel_item='true')['id']
+            for f in item['images']]
+    for k in kids:
+        wait_ready(k, 300)
+    p = dict(media_type='CAROUSEL', caption=caption(item), children=','.join(kids))
+    if CFG.get('ai_label', True):
+        p['is_ai_generated'] = 'true'
+    return api('POST', f'{ig}/media', **p)['id']
+
+
+def prepare(ig, item, st):
+    """Creates the post on Instagram without publishing it; returns (container id, media base used, posted as).
+
+    A Trial Reel that Instagram refuses (too few followers) becomes a normal reel (config trial_fallback
+    "normal") or is left out ("skip"). After a refusal the poster tries Trial again after trial_retry_hours,
+    so it switches back by itself once Instagram allows Trial Reels.
+    """
     files = [item['video'], item['cover']] if item['kind'] == 'reel' else item['images']
+    trial = item['kind'] == 'reel' and bool(item.get('trial'))
+    skip = CFG.get('trial_fallback', 'normal') == 'skip'
+    if trial and not trial_allowed(st):
+        if skip:
+            raise Skip('Instagram does not allow Trial Reels on this account yet')
+        trial = False
     last = None
     for base in bases_for(files):
         try:
             if item['kind'] == 'reel':
-                p = dict(media_type='REELS', caption=caption(item), video_url=link(base, item['video']),
-                         cover_url=link(base, item['cover']))
-                if item.get('trial'):
-                    p['trial_params'] = json.dumps({'graduation_strategy': CFG.get('trial_graduation', 'SS_PERFORMANCE')})
-                else:
-                    p['share_to_feed'] = 'true'
+                try:
+                    cid = create_reel(ig, item, base, trial)
+                except ApiError as e:
+                    if not (trial and trial_refused(e)):
+                        raise
+                    st['trial_refused'] = now().isoformat(timespec='seconds')
+                    log('Instagram does not allow Trial Reels yet:', e)
+                    if skip:
+                        raise Skip('Instagram does not allow Trial Reels on this account yet')
+                    trial = False
+                    cid = create_reel(ig, item, base, False)
+                kind = 'trial reel' if trial else 'reel'
             else:
-                kids = [api('POST', f'{ig}/media', image_url=link(base, f), is_carousel_item='true')['id']
-                        for f in item['images']]
-                for k in kids:
-                    wait_ready(k, 300)
-                p = dict(media_type='CAROUSEL', caption=caption(item), children=','.join(kids))
-            if CFG.get('ai_label', True):
-                p['is_ai_generated'] = 'true'
-            cid = api('POST', f'{ig}/media', **p)['id']
+                cid, kind = create_carousel(ig, item, base), 'carousel'
             wait_ready(cid)
-            return cid, base
+            if trial:
+                st.pop('trial_refused', None)
+            return cid, base, kind
         except ApiError as e:
             if e.code == 190:
                 raise
@@ -264,8 +317,9 @@ def write_report(name, lines):
 
 
 KEY_HELP = ('Make a new key: developers.facebook.com > My Apps > Foldville Poster > Use cases > Customize > '
-            'API setup with Instagram login > Generate token > Copy. Then in this repository: Settings > '
-            'Secrets and variables > Actions > IG_TOKEN > Update, paste it and save.')
+            'API setup with Unified login > 2. Generate access tokens > Generate token, pick Foldville and the '
+            'Instagram account, then copy the key. Then in this repository: Settings > Secrets and variables > '
+            'Actions > IG_TOKEN > Update, paste it and save.')
 
 
 def key_reminder(st):
@@ -289,9 +343,9 @@ def run_post(st):
         return 0
     sched = load(os.path.join(ROOT, 'schedule.json'), {'items': []})['items']
     done, missed, failed = st.setdefault('done', {}), st.setdefault('missed', {}), st.setdefault('failed', {})
-    tries = st.setdefault('tries', {})
-    todo = sorted((i for i in sched if i['id'] not in done and i['id'] not in missed and i['id'] not in failed),
-                  key=when)
+    skipped, tries = st.setdefault('skipped', {}), st.setdefault('tries', {})
+    finished = set(done) | set(missed) | set(failed) | set(skipped)
+    todo = sorted((i for i in sched if i['id'] not in finished), key=when)
     ig = None
     errors = 0
     for item in todo:
@@ -311,14 +365,18 @@ def run_post(st):
                 log('posting as', me.get('username'))
             sleep_until(due - LEAD)
             log('preparing', item['id'], 'for', local(due))
-            cid, base = prepare(ig, item)
+            cid, base, kind = prepare(ig, item, st)
             sleep_until(due)
             mid, info = publish(ig, cid)
             done[item['id']] = {'when': item['when'], 'posted': now().isoformat(timespec='seconds'), 'media_id': mid,
-                                'permalink': info.get('permalink'), 'ai_label': info.get('is_ai_generated'),
+                                'as': kind, 'permalink': info.get('permalink'), 'ai_label': info.get('is_ai_generated'),
                                 'from': base}
-            log('POSTED', item['id'], info.get('permalink', mid))
+            log('POSTED', item['id'], 'as a', kind, info.get('permalink', mid))
             save_state(st, f"posted {item['id']}")
+        except Skip as e:
+            skipped[item['id']] = {'when': item['when'], 'why': str(e)}
+            log('SKIPPED', item['id'], '-', e)
+            save_state(st, f"skipped {item['id']}")
         except ApiError as e:
             errors += 1
             log('FAILED', item['id'], '-', e)
@@ -355,13 +413,18 @@ def pick_items(ids, n=2):
 
 def run_dryrun(ids):
     ig, me = whoami()
+    scratch = {}  # a test run never changes what the real runs do
     lines = [f'# Test run {now():%Y-%m-%d %H:%M} UTC (nothing published)', '',
              f"Account: {who(me)}", '']
     ok = True
     for item in pick_items(ids):
         try:
-            cid, base = prepare(ig, item)
-            lines.append(f"- {item['id']} ({local(when(item))}): READY on Instagram, not published (files from {base})")
+            cid, base, kind = prepare(ig, item, scratch)
+            note = ' (Trial Reels not allowed yet, so a normal reel)' if item.get('trial') and kind == 'reel' else ''
+            lines.append(f"- {item['id']} ({local(when(item))}): READY on Instagram as a {kind}{note}, "
+                         f"not published (files from {base})")
+        except Skip as e:
+            lines.append(f"- {item['id']} ({local(when(item))}): would be left out: {e}")
         except ApiError as e:
             ok = False
             lines.append(f"- {item['id']} ({local(when(item))}): FAILED: {e}")

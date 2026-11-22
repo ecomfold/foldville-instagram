@@ -8,6 +8,8 @@
  ],
  "ai_label": true,
  "trial_graduation": "SS_PERFORMANCE",
+ "trial_fallback": "normal",
+ "trial_retry_hours": 20,
  "december_sale_line": "",
  "prepare_minutes_before": 10,
  "lookahead_minutes": 26,

@@ -1,1 +1,1 @@
-{"mode": "check", "item": "b02-c1,b02-r01", "note": "check: account, follower count, posting limit, files online (nothing posted)"}
+{"mode": "dryrun", "item": "b02-r01,b02-r02", "note": "test: prepare Monday 12:00 reel (normal, Trial not allowed yet) and 19:00 main reel without publishing"}
