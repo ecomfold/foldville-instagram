@@ -1,5 +1,5 @@
 {
- "paused": true,
+ "paused": false,
  "api_host": "https://graph.facebook.com",
  "ig_user_id": "17841430424317379",
  "media_bases": [
