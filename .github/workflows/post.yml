@@ -1,0 +1,55 @@
+name: Post to Instagram
+
+on:
+  schedule:
+    # every 15 minutes from 06:00 to 22:59 Polish time; the poster only acts when something is due
+    - cron: '7,22,37,52 5-21 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'post, dryrun (prepare without publishing) or check'
+        required: true
+        default: 'dryrun'
+      item:
+        description: 'item ids, comma separated (empty = the next ones)'
+        required: false
+        default: ''
+  push:
+    branches: [main]
+    paths: ['request.json']
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: instagram-poster
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: Get the poster (without the media files)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+          filter: blob:none
+          fetch-depth: 1
+      - name: Get the state branch
+        uses: actions/checkout@v4
+        with:
+          ref: state
+          path: state
+          fetch-depth: 1
+      - name: Post
+        env:
+          IG_TOKEN: ${{ secrets.IG_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODE: ${{ github.event.inputs.mode }}
+          ITEM: ${{ github.event.inputs.item }}
+        run: |
+          git -C state config user.name "foldville-poster"
+          git -C state config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 poster.py

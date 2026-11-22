@@ -1,0 +1,17 @@
+{
+ "paused": true,
+ "api_host": "https://graph.facebook.com",
+ "ig_user_id": "17841430424317379",
+ "media_bases": [
+  "https://ecomfold.github.io/foldville-instagram",
+  "https://raw.githubusercontent.com/ecomfold/foldville-instagram/main"
+ ],
+ "ai_label": true,
+ "trial_graduation": "SS_PERFORMANCE",
+ "december_sale_line": "",
+ "prepare_minutes_before": 10,
+ "lookahead_minutes": 26,
+ "late_hours": 3,
+ "max_tries": 3,
+ "token_expires": ""
+}
