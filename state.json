@@ -1,5 +1,15 @@
 {
- "done": {},
+ "done": {
+  "b02-c1": {
+   "when": "2026-11-23T09:00:00+01:00",
+   "posted": "2026-11-23T08:00:13+00:00",
+   "media_id": "18117365450016797",
+   "as": "carousel",
+   "permalink": "https://www.instagram.com/p/DgE5p7JmgY5/",
+   "ai_label": true,
+   "from": "https://ecomfold.github.io/foldville-instagram"
+  }
+ },
  "missed": {},
  "failed": {},
  "skipped": {},
