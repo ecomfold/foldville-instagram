@@ -8,10 +8,20 @@
    "permalink": "https://www.instagram.com/p/DgE5p7JmgY5/",
    "ai_label": true,
    "from": "https://ecomfold.github.io/foldville-instagram"
+  },
+  "b02-r01": {
+   "when": "2026-11-23T12:00:00+01:00",
+   "posted": "2026-11-23T11:00:12+00:00",
+   "media_id": "18027222596717914",
+   "as": "reel",
+   "permalink": "https://www.instagram.com/reel/DgFNIGvkm_w/",
+   "ai_label": true,
+   "from": "https://ecomfold.github.io/foldville-instagram"
   }
  },
  "missed": {},
  "failed": {},
  "skipped": {},
- "tries": {}
+ "tries": {},
+ "trial_refused": "2026-11-23T10:50:02+00:00"
 }
