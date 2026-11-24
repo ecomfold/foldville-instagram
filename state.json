@@ -58,6 +58,8 @@
  "missed": {},
  "failed": {},
  "skipped": {},
- "tries": {},
+ "tries": {
+  "b02-r03": 1
+ },
  "trial_refused": "2026-11-23T10:50:02+00:00"
 }
