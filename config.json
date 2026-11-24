@@ -12,7 +12,7 @@
  "trial_retry_hours": 20,
  "december_sale_line": "",
  "prepare_minutes_before": 10,
- "lookahead_minutes": 26,
+ "lookahead_minutes": 100,
  "late_hours": 3,
  "max_tries": 3,
  "token_expires": ""

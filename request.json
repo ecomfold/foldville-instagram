@@ -1,1 +1,1 @@
-{"mode": "dryrun", "item": "b02-c1,b02-r01,b02-r29,b02-r02,b02-r43,b02-r18", "note": "test: Monday carousel + 4 reels with music, and r18 (online on 1 of 2 links in the 11:43 check), without publishing"}
+{"mode": "check", "item": "b02-r30,b02-r04", "note": "is Instagram API access still blocked? (code 200 'API access blocked' since Tue 24 Nov ~11:00 UTC)"}
