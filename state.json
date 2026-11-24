@@ -56,10 +56,18 @@
   }
  },
  "missed": {},
- "failed": {},
+ "failed": {
+  "b02-r03": {
+   "when": "2026-11-24T12:00:00+01:00",
+   "error": "HTTP 400, code 200/5258005: API access blocked."
+  }
+ },
  "skipped": {},
  "tries": {
-  "b02-r03": 2
+  "b02-r03": 3
  },
- "trial_refused": "2026-11-23T10:50:02+00:00"
+ "trial_refused": "2026-11-23T10:50:02+00:00",
+ "issues": {
+  "failed-b02-r03": "2026-11-24T13:20:56+00:00"
+ }
 }
